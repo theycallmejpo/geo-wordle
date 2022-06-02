@@ -37,13 +37,10 @@ type alias Solution =
 type Guess
     = GuessIdle
     | GuessCurrent String
-    | GuessFinished String Int
+    | GuessFinished String
 
 
 
--- list of guesses
---  each guess has 5 letters (should be configurable)
--- need to keep state about correctness of each letter? could probably be derived though
 -- UPDATE
 
 
@@ -150,7 +147,37 @@ update msg model =
                     ( model, Cmd.none )
 
         EnterPressed ->
-            ( model, Cmd.none )
+            case model of
+                LoadedInProgress guesses solution maxGuesses ->
+                    case List.head <| List.reverse guesses of
+                        Just guess ->
+                            case guess of
+                                GuessCurrent currentGuess ->
+                                    case String.length currentGuess of
+                                        5 ->
+                                            let
+                                                updatedGuesses =
+                                                    [ GuessFinished currentGuess, GuessCurrent "" ]
+                                                        |> List.append
+                                                            (guesses
+                                                                |> List.reverse
+                                                                |> List.drop 1
+                                                                |> List.reverse
+                                                            )
+                                            in
+                                            ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+
+                                        _ ->
+                                            ( model, Cmd.none )
+
+                                _ ->
+                                    ( model, Cmd.none )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -190,7 +217,7 @@ viewGame guesses solution maxGuesses =
         |> List.append guesses
         |> Debug.log "guesses"
         |> List.foldl viewGuess []
-        |> div [ class "mx-auto w-[24rem] my-8 text-sm grid grid-cols-5 grid-rows-6 gap-2" ]
+        |> div [ class "mx-auto w-[24rem] my-8 text-sm grid grid-cols-5 grid-rows-6 gap-1.5" ]
 
 
 viewGuess : Guess -> List (Html Msg) -> List (Html Msg)
@@ -198,7 +225,7 @@ viewGuess guess acc =
     case guess of
         GuessIdle ->
             List.map
-                (\_ -> div [ class "border border-black aspect-square flex justify-center items-center" ] [])
+                (\_ -> div [ class guessBoxClasses ] [])
                 (List.repeat 5 0)
                 |> List.append acc
 
@@ -207,16 +234,25 @@ viewGuess guess acc =
                 |> List.map
                     (\letter ->
                         div
-                            [ class "border border-black aspect-square flex justify-center items-center uppercase" ]
+                            [ class guessBoxClasses ]
                             [ text <| String.fromChar letter ]
                     )
                 |> List.append acc
 
-        GuessFinished userGuess _ ->
-            [ div
-                [ class "bg-green-200 rounded-md px-4 py-2 w-full mb-4" ]
-                [ text userGuess ]
-            ]
+        GuessFinished previousGuess ->
+            String.toList previousGuess
+                |> List.map
+                    (\letter ->
+                        div
+                            [ class <| String.join " " [ guessBoxClasses, "bg-red-200" ] ]
+                            [ text <| String.fromChar letter ]
+                    )
+                |> List.append acc
+
+
+guessBoxClasses : String
+guessBoxClasses =
+    "border border-black aspect-square flex justify-center items-center uppercase font-bold text-3xl"
 
 
 
