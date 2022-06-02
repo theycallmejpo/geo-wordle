@@ -153,22 +153,36 @@ update msg model =
                         Just guess ->
                             case guess of
                                 GuessCurrent currentGuess ->
-                                    case String.length currentGuess of
-                                        5 ->
-                                            let
-                                                updatedGuesses =
-                                                    [ GuessFinished currentGuess, GuessCurrent "" ]
-                                                        |> List.append
-                                                            (guesses
-                                                                |> List.reverse
-                                                                |> List.drop 1
-                                                                |> List.reverse
-                                                            )
-                                            in
-                                            ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+                                    if List.length guesses == maxGuesses then
+                                        let
+                                            completedGuesses =
+                                                [ GuessFinished currentGuess ]
+                                                    |> List.append
+                                                        (guesses
+                                                            |> List.reverse
+                                                            |> List.drop 1
+                                                            |> List.reverse
+                                                        )
+                                                    |> List.take maxGuesses
+                                        in
+                                        ( LoadedCompleted completedGuesses solution, Cmd.none )
 
-                                        _ ->
-                                            ( model, Cmd.none )
+                                    else if String.length currentGuess == 5 then
+                                        let
+                                            updatedGuesses =
+                                                [ GuessFinished currentGuess, GuessCurrent "" ]
+                                                    |> List.append
+                                                        (guesses
+                                                            |> List.reverse
+                                                            |> List.drop 1
+                                                            |> List.reverse
+                                                        )
+                                                    |> List.take maxGuesses
+                                        in
+                                        ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+
+                                    else
+                                        ( model, Cmd.none )
 
                                 _ ->
                                     ( model, Cmd.none )
@@ -203,7 +217,9 @@ view model =
                 ]
 
         LoadedCompleted _ _ ->
-            p [] [ text "Game done!" ]
+            div [ class "flex items-center justify-center h-screen" ]
+                [ p [ class "text-3xl font-bold" ] [ text "Game done!" ]
+                ]
 
 
 viewHeader : Model -> Html msg
