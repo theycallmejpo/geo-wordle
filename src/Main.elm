@@ -2,17 +2,23 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events
+import Date exposing (Date)
 import Html exposing (Html, div, form, input, nav, p, text)
 import Html.Attributes as Attr exposing (class, type_, value)
 import Html.Events as Evts exposing (onClick)
 import Http
 import Json.Decode exposing (Decoder, field)
+import Task
 
 
 main : Program () Model Msg
 main =
     Browser.element
-        { init = \_ -> ( Loading, fetchSolutionOfTheDay )
+        { init =
+            \_ ->
+                ( Loading
+                , Task.perform GotDate Date.today
+                )
         , view = view
         , update = update
         , subscriptions = subscriptions
@@ -26,8 +32,8 @@ main =
 type Model
     = Loading
     | Failed String
-    | LoadedInProgress (List Guess) Solution Int
-    | LoadedCompleted (List Guess) Solution
+    | GameInProgress (List Guess) Solution Int
+    | GameCompleted (List Guess) Solution
 
 
 type alias Solution =
@@ -45,7 +51,7 @@ type Guess
 
 
 type Msg
-    = GotResponse (Result Http.Error String)
+    = GotDate Date
     | CurrentGuessUpdated String
     | LetterPressed Char
     | BackspacePressed
@@ -56,20 +62,18 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotResponse res ->
-            case res of
-                Ok solution ->
-                    ( LoadedInProgress [ GuessCurrent "" ] solution 6
-                    , Cmd.none
-                    )
-
-                Err _ ->
-                    -- currently no need to pattern match on the error
-                    ( Failed "unable to fetch today's word", Cmd.none )
+        GotDate today ->
+            let
+                t =
+                    Debug.log "asdf" (Date.toIsoString today)
+            in
+            ( GameInProgress [ GuessCurrent "" ] "tango" 6
+            , Cmd.none
+            )
 
         CurrentGuessUpdated currentGuess ->
             case model of
-                LoadedInProgress guesses solution maxGuesses ->
+                GameInProgress guesses solution maxGuesses ->
                     let
                         updatedGuesses =
                             GuessCurrent currentGuess
@@ -81,14 +85,14 @@ update msg model =
                                         |> List.reverse
                                     )
                     in
-                    ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+                    ( GameInProgress updatedGuesses solution maxGuesses, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
 
         LetterPressed l ->
             case model of
-                LoadedInProgress guesses solution maxGuesses ->
+                GameInProgress guesses solution maxGuesses ->
                     case List.head <| List.reverse guesses of
                         Just guess ->
                             case guess of
@@ -105,7 +109,7 @@ update msg model =
                                                         |> List.reverse
                                                     )
                                     in
-                                    ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+                                    ( GameInProgress updatedGuesses solution maxGuesses, Cmd.none )
 
                                 _ ->
                                     ( model, Cmd.none )
@@ -118,7 +122,7 @@ update msg model =
 
         BackspacePressed ->
             case model of
-                LoadedInProgress guesses solution maxGuesses ->
+                GameInProgress guesses solution maxGuesses ->
                     case List.head <| List.reverse guesses of
                         Just guess ->
                             case guess of
@@ -135,7 +139,7 @@ update msg model =
                                                         |> List.reverse
                                                     )
                                     in
-                                    ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+                                    ( GameInProgress updatedGuesses solution maxGuesses, Cmd.none )
 
                                 _ ->
                                     ( model, Cmd.none )
@@ -148,7 +152,7 @@ update msg model =
 
         EnterPressed ->
             case model of
-                LoadedInProgress guesses solution maxGuesses ->
+                GameInProgress guesses solution maxGuesses ->
                     case List.head <| List.reverse guesses of
                         Just guess ->
                             case guess of
@@ -165,7 +169,7 @@ update msg model =
                                                         )
                                                     |> List.take maxGuesses
                                         in
-                                        ( LoadedCompleted completedGuesses solution, Cmd.none )
+                                        ( GameCompleted completedGuesses solution, Cmd.none )
 
                                     else if String.length currentGuess == 5 then
                                         let
@@ -179,7 +183,7 @@ update msg model =
                                                         )
                                                     |> List.take maxGuesses
                                         in
-                                        ( LoadedInProgress updatedGuesses solution maxGuesses, Cmd.none )
+                                        ( GameInProgress updatedGuesses solution maxGuesses, Cmd.none )
 
                                     else
                                         ( model, Cmd.none )
@@ -198,7 +202,7 @@ update msg model =
 
 
 
--- VIEW>
+-- VIEW
 
 
 view : Model -> Html Msg
@@ -210,13 +214,13 @@ view model =
         Failed errorMsg ->
             p [] [ text errorMsg ]
 
-        LoadedInProgress guesses solution maxGuesses ->
+        GameInProgress guesses solution maxGuesses ->
             div []
                 [ viewHeader model
                 , viewGame guesses solution maxGuesses
                 ]
 
-        LoadedCompleted _ _ ->
+        GameCompleted _ _ ->
             div [ class "flex items-center justify-center h-screen" ]
                 [ p [ class "text-3xl font-bold" ] [ text "Game done!" ]
                 ]
@@ -231,7 +235,6 @@ viewGame : List Guess -> Solution -> Int -> Html Msg
 viewGame guesses solution maxGuesses =
     createFillerGuesses (List.length guesses + 1) maxGuesses
         |> List.append guesses
-        |> Debug.log "guesses"
         |> List.foldl viewGuess []
         |> div [ class "mx-auto w-[24rem] my-8 text-sm grid grid-cols-5 grid-rows-6 gap-1.5" ]
 
@@ -301,23 +304,6 @@ toKey string =
 
                 _ ->
                     NoOp
-
-
-
--- HTTP
-
-
-fetchSolutionOfTheDay : Cmd Msg
-fetchSolutionOfTheDay =
-    Http.get
-        { url = "http://localhost:5019/2022-02-12"
-        , expect = Http.expectJson GotResponse decoder
-        }
-
-
-decoder : Decoder String
-decoder =
-    field "solution" Json.Decode.string
 
 
 
