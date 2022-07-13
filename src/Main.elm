@@ -6,9 +6,10 @@ import Date exposing (Date)
 import Html exposing (Html, div, form, input, nav, p, text)
 import Html.Attributes as Attr exposing (class, type_, value)
 import Html.Events as Evts exposing (onClick)
-import Http
 import Json.Decode exposing (Decoder, field)
 import Task
+import Time
+import Words exposing (wordOfTheDay)
 
 
 main : Program () Model Msg
@@ -63,13 +64,17 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotDate today ->
-            let
-                t =
-                    Debug.log "asdf" (Date.toIsoString today)
-            in
-            ( GameInProgress [ GuessCurrent "" ] "tango" 6
-            , Cmd.none
-            )
+            case wordOfTheDay today of
+                Just solution ->
+                    ( GameInProgress
+                        [ GuessCurrent "" ]
+                        solution
+                        6
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( Failed "Unable to get word of the day", Cmd.none )
 
         CurrentGuessUpdated currentGuess ->
             case model of
@@ -298,9 +303,9 @@ toKey string =
             EnterPressed
 
         _ ->
-            case String.uncons <| Debug.log "type" string of
+            case String.uncons <| string of
                 Just ( letter, "" ) ->
-                    LetterPressed <| Debug.log "got" letter
+                    LetterPressed <| letter
 
                 _ ->
                     NoOp
