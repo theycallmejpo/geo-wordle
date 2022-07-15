@@ -1,6 +1,9 @@
 import "./style.css";
 import {Elm} from "./Main.elm";
 
-const app = document.querySelector<HTMLDivElement>("#app")!;
+const node = document.querySelector<HTMLDivElement>("#app")!;
+const app = Elm.Main.init({node});
 
-Elm.Main.init({node: app});
+app.ports.showDialog.subscribe((id: string) => {
+  // const dialog =
+});

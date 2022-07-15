@@ -1,4 +1,4 @@
-module Words exposing (wordOfTheDay)
+module Words exposing (wordExists, wordOfTheDay)
 
 import Array
 import Date exposing (Date)
@@ -19,6 +19,11 @@ wordOfTheDay date =
                 |> modBy (List.length solutions)
     in
     Array.get index (Array.fromList solutions)
+
+
+wordExists : String -> Bool
+wordExists word =
+    Set.member word words
 
 
 solutions : List String
