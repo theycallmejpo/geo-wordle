@@ -378,90 +378,122 @@ toKey string =
 parseGuess : String -> String -> List GuessedLetter
 parseGuess solution guess =
     let
-        listWithCorrectGueses =
-            String.toList guess
+        solutionAsList =
+            solution
+                |> String.toList
+                |> List.map String.fromChar
                 |> List.indexedMap Tuple.pair
-                |> List.map (checkLetter solution)
 
-        remainingLettersMap =
-            listWithCorrectGueses
-                |> List.indexedMap Tuple.pair
-                |> List.foldl grabTodoLetterIndex Dict.empty
-                |> Debug.log "remainder"
+        zipped =
+            guess
+                |> String.toList
+                |> List.map String.fromChar
+                |> List.map2 Tuple.pair solutionAsList
+
+        { list, dict } =
+            zipped
+                |> List.foldl checkLetterAndStoreMismatch (Temp [] Dict.empty)
+                |> Debug.log ""
+
+        result =
+            list
+                |> List.foldl checkLettersInWrongPlace (Temp [] dict)
     in
-    listWithCorrectGueses
-
-
-
--- |> List.foldl
+    result.list
 
 
 type alias Temp =
-    { remaining : Dict String (List Int)
-    , parsed : List GuessedLetter
+    { list : List GuessedLetter
+    , dict : Dict String (List Int)
     }
 
 
-do : GuessedLetter -> Temp -> Temp
-do { letter, status } { remaining, parsed } ch =
+checkLettersInWrongPlace : GuessedLetter -> Temp -> Temp
+checkLettersInWrongPlace { letter, status } { list, dict } =
     case status of
         ToDo ->
-            if Dict.member letter remaining then
-                Temp remaining parsed
-
-            else
-                Temp remaining parsed
-
-        _ ->
-            Temp remaining <| List.append parsed [ GuessedLetter letter status ]
-
-
-grabTodoLetterIndex : ( Int, GuessedLetter ) -> Dict String (List Int) -> Dict String (List Int)
-grabTodoLetterIndex ( index, { letter, status } ) dict =
-    case status of
-        ToDo ->
-            let
-                maybeIndexes =
-                    Dict.get letter dict
-            in
-            case maybeIndexes of
+            case Dict.get letter dict of
                 Just indexes ->
-                    Dict.insert letter (List.append indexes [ index ]) dict
+                    case indexes of
+                        -- Only keep the key in the dictionary when the values
+                        -- for `letter` has at least 2 indexes, otherwise drop
+                        -- the key
+                        _ :: _ :: _ ->
+                            let
+                                newList =
+                                    GuessedLetter letter WrongPlace
+                                        |> List.singleton
+                                        |> List.append list
+
+                                newDict =
+                                    Dict.insert letter (List.drop 1 indexes) dict
+                            in
+                            Temp newList newDict
+
+                        _ ->
+                            let
+                                newList =
+                                    GuessedLetter letter WrongPlace
+                                        |> List.singleton
+                                        |> List.append list
+
+                                newDict =
+                                    Dict.remove letter dict
+                            in
+                            Temp newList newDict
 
                 Nothing ->
-                    Dict.insert letter [ index ] dict
+                    let
+                        newList =
+                            GuessedLetter letter status
+                                |> List.singleton
+                                |> List.append list
+                    in
+                    Temp newList dict
 
         _ ->
-            dict
+            let
+                newList =
+                    GuessedLetter letter status
+                        |> List.singleton
+                        |> List.append list
+            in
+            Temp newList dict
 
 
-checkLetter : String -> ( Int, Char ) -> GuessedLetter
-checkLetter solution ( index, char ) =
-    let
-        solutionLetter =
-            getLetterAtIndex solution index
+checkLetterAndStoreMismatch : ( ( Int, String ), String ) -> Temp -> Temp
+checkLetterAndStoreMismatch ( ( solutionIndex, solutionLetter ), guessedLetter ) { list, dict } =
+    if solutionLetter == guessedLetter then
+        let
+            newList =
+                GuessedLetter guessedLetter Correct
+                    |> List.singleton
+                    |> List.append list
+        in
+        Temp newList dict
 
-        letter =
-            String.fromChar char
-    in
-    case solutionLetter of
-        Just correctLetter ->
-            if correctLetter == letter then
-                GuessedLetter letter Correct
+    else
+        let
+            newList =
+                GuessedLetter guessedLetter ToDo
+                    |> List.singleton
+                    |> List.append list
 
-            else
-                GuessedLetter letter ToDo
+            newDict =
+                case Dict.get solutionLetter dict of
+                    Just indexes ->
+                        let
+                            newIndexes =
+                                solutionIndex
+                                    |> List.singleton
+                                    |> List.append indexes
+                        in
+                        Dict.insert solutionLetter newIndexes dict
 
-        Nothing ->
-            GuessedLetter letter Correct
-
-
-getLetterAtIndex : String -> Int -> Maybe String
-getLetterAtIndex solution index =
-    String.toList solution
-        |> Array.fromList
-        |> Array.get index
-        |> Maybe.map String.fromChar
+                    Nothing ->
+                        Dict.insert solutionLetter [ solutionIndex ] dict
+        in
+        Temp newList newDict
 
 
 createFillerGuesses : Int -> Int -> List Guess
